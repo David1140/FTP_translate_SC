@@ -53,7 +53,9 @@ int main(int argc,char *argv[])
                 {
                     char recv_buf[1024]={0};
                     int ret = recv(sockfd,recv_buf,1024,0);
-                    
+                    // 计时器开始
+                    struct timeval start, end;
+                    gettimeofday(&start, NULL);
                     if(ret > 0)
                     {
                         printf("client recv over\n");	
@@ -73,6 +75,8 @@ int main(int argc,char *argv[])
                                 client_filesend(sockfd,recv_buf);break;
                             case 128:
                             	close(sockfd);printf("connect exit!\n");return 0;
+                            case 64:
+                                client_cd_dir(sockfd);break;
                             default:
                                 printf("the cmd was undefinited\n");//erver_out(recv_buf);
                                 break;
@@ -88,6 +92,13 @@ int main(int argc,char *argv[])
                         printf("connect lost");
                         break;
                     }
+                    gettimeofday(&end, NULL);
+                    double elapsedTime = (end.tv_sec - start.tv_sec) + (end.tv_usec - start.tv_usec) / 1000000.0;
+                    printf("传输时间：%f秒\n", elapsedTime);
+
+                    // 计算传输速度
+                    double speed = temp.resp_len / elapsedTime;
+                    printf("传输速度：%f bytes/second\n", speed);
                 }
             }
             else

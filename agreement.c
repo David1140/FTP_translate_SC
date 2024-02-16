@@ -3,6 +3,7 @@
 unsigned char pack_temp[1024]={0};
 // 构造结构体
 pkg_ser package;
+char server_dir[FILENAME_MAX]  = {"./server"};
 int setnonblocking(int fd)
 {
     int  flags;
@@ -26,91 +27,33 @@ long int getfile_size(char*filename)
     printf("文件大小为 %ld 字节。\n", size);
     return size;
 }
-void client_filesend(int sockfd,char*str)//send file to server str 是filename
-{
-    //int flag =0;//标记是否找到了目标文件夹
-    unsigned char *cmd;//int x=0;//用于保存内容的长度
-    //DIR *dir = opendir("./client");//打开要复制的目录
-	// if(dir == NULL)
-	// {
-	// 	perror("opendir dir_src failed");
-	// 	return ;
-	// }
-    //struct dirent *dirp = NULL;
-    int ret=0;
-	// while(dirp = readdir(dir))// {   
-    char file_src[MAXNAMELEN]={0};
-    char file_dest[MAXNAMELEN]={0};
-    // printf("%d:%d",sizeof(dirp->d_name),sizeof(toclient.neirong));
-    //printf("dirname:%scompare%s=%d\n",dirp->d_name,str,strcmp(str,dirp->d_name));
-        // if(0 == strncmp(str,dirp->d_name,strlen(str)))
-        // {
-            sprintf(file_src,"%s/%s","./server",str);//dirp->d_name
-            sprintf(file_dest,"%s/%s","./client",str);//dirp->d_name
-            char buf[1024];
-            //printf("!!!open%s!!!\n",file_dest);
-            int fd = open(file_dest,O_RDONLY,0777);
-            if(fd==-1)
-            {
-                perror("open failed");
-                return;
-            }
-            long int temp_size=getfile_size(file_dest);
-            while(1)
-            {
-                char *pathname=malloc(1024);
-                ret = read(fd,buf,400);
-                if(ret == 0){break;}//write(fd_dest,buf,ret);
-                //printf("%s:%s",file_src,buf);
-                //printf("neirong:%s\n",buf);
-                sprintf(pathname,"%s:%s",file_src,buf);printf("the file:%s\n",pathname);
-                cmd=packaging(FTP_CMD_PUT,strlen(pathname),pathname,ret,temp_size);
-                int confd=send(sockfd,cmd,1024,0);
-                free(pathname);
-                if(-1==confd)
-                {
-                    perror("send failed\n");
-                }
-            }
-            close(fd);
-        //}
-    //}
-    //printf("line:%d\n",__LINE__);
-	//closedir(dir);
-}
-void server_out(char *recv_buf)
-{
-    pkg_ser temp;
-    //将传入的数据赋值到temp中
-    memcpy(&temp,recv_buf,sizeof(pkg_ser));
-    //temp.resp_len=recv_buf[9]+(recv_buf[10]<<8)+(recv_buf[11]<<16)+(recv_buf[12]<<24);
-    printf(" the recv_len:%d\n",temp.resp_len);
-    printf("收到的内容是：");
-    //for(int i=0;i<temp.resp_len;i++)
-    {
-        printf("%s",temp.neirong);
+int custom_strrchr(const char* str, char c, char* buffer, size_t buffer_size) {
+    const char* found = NULL;
+    const char* current = str;
+
+    while (*current) {
+        if (*current == c) {
+            found = current;
+        }
+        current++;
     }
-    printf("\n");
-}
-void client_recv(char *str)//recv file
-{ 
-    pkg_ser over;//int flag =0;
-    memcpy(&over,str,sizeof(pkg_ser));
-    
-    printf("the filelen:%d\n",over.resp_len);
-    int namelen=0;
-    char *filename;char *all;
-    printf("内容是：%s\n",over.neirong);
-    char *dest;dest = over.neirong;//dest +=9; 
-    //printf("内容是：%s\n",dest);
-    filename=strtok(dest,":");
-    //sprintf(filename,"./client/%s",filename);
-    printf("filename:%s\n",filename);
-    int fd = open(filename,O_RDWR|O_CREAT|O_APPEND,0777);
-    all=strtok(NULL,":"); //printf("%s\n",filename);
-    printf("neirong:%s\n",all);
-    write(fd,all,strlen(all));//over.resp_len-sizeof(filename)
-    close(fd);
+    printf("%s\n",found);
+    if (found != NULL) {
+        size_t length = found - str;  // 计算截断后的字符串长度
+
+        if (length >= buffer_size) {
+            printf("缓冲区不足，截断失败");
+            return -1;  // 缓冲区不足，截断失败
+        }
+
+        strncpy(buffer, str, length);  // 复制截断后的字符串到缓冲区
+        buffer[length] = '\0';  // 在末尾添加字符串结束符
+        printf("successed:%s\n",buffer);
+        return 1;  // 截断成功
+    } else {
+        printf("cd failed");
+        return -2;  // 没有找到指定字符，截断失败
+    }
 }
 void client_send(int sockfd,char*str)
 {
@@ -176,6 +119,24 @@ void client_send(int sockfd,char*str)
             perror("send failed1");
         }
     }
+    else if(0==strcmp(str,"cd"))
+    {   
+        enum CMD_NO cmd_no = FTP_CMD_CD;temp=cmd_no;
+        char filename[100]={0};
+        printf("请输要切换的目录:\n");
+        //scanf("%s",&filename);
+        scanf("%99s", filename);  // 注意限制输入字符数，避免缓冲区溢出
+        //fread(&filename,sizeof(char),sizeof(filename),stdin);
+        send_len = strlen(filename);
+        printf("目录长度为:%d\n",send_len);
+        cmd=packaging(temp,send_len,filename,send_len,send_len);
+        int fd=send(sockfd,cmd,1024,0);
+        //printf("send_cmd_no:%s\n",cmd);
+        if(-1==fd)
+        {
+            perror("send failed1");
+        }
+    }
     else 
     {
         enum CMD_NO cmd_no = FTP_CMD_UNKNOW;temp=cmd_no;
@@ -190,12 +151,131 @@ void client_send(int sockfd,char*str)
     //free(cmd);
     return ;
 }
+void server_out(char *recv_buf)
+{
+    pkg_ser temp;
+    //将传入的数据赋值到temp中
+    memcpy(&temp,recv_buf,sizeof(pkg_ser));
+    //temp.resp_len=recv_buf[9]+(recv_buf[10]<<8)+(recv_buf[11]<<16)+(recv_buf[12]<<24);
+    printf(" the recv_len:%d\n",temp.resp_len);
+    printf("收到的内容是：");
+    /*DT_UNKNOWN：未知的文件类型。
+        DT_REG：普通文件。~
+        DT_DIR：目录文件。!
+        DT_FIFO：FIFO 管道文件。@
+        DT_SOCK：Socket 文件。#
+        DT_LNK：符号链接文件。$
+        DT_BLK：块设备文件。^
+        DT_CHR：字符设备文件。&
+        */
+    for(int i=0;i<temp.resp_len;i++)
+    {
+        switch(temp.neirong[i])
+        {
+            case '~':
+                printf(" %s%c",WHITE,temp.neirong[++i]);break;
+            case '!':
+                printf(" %s%c",GREEN,temp.neirong[++i]);break;
+            case '@':
+                printf(" %s%c",RED,temp.neirong[++i]);break;
+            case '#':
+                printf(" %s%c",YELLOW,temp.neirong[++i]);break;
+            case '$':
+                printf(" %s%c",BLUE,temp.neirong[++i]);break;
+            case '^':
+                printf(" %s%c",CYAN,temp.neirong[++i]);break;
+            case '&':
+                printf(" %s%c",RESET,temp.neirong[++i]);break;
+            case '*':
+                printf(" %s%c",MAGENTA,temp.neirong[++i]);break;
+            default:
+               printf("%c",temp.neirong[i]);break; 
+        }
+    }
+    printf("\n");
+}
+void client_recv(char *str)//recv file
+{ 
+    pkg_ser over;//int flag =0;
+    memcpy(&over,str,sizeof(pkg_ser));
+    
+    printf("the filelen:%d\n",over.resp_len);
+    int namelen=0;
+    char *filename;char *all;
+    printf("内容是：%s\n",over.neirong);
+    char *dest;dest = over.neirong;//dest +=9; 
+    //printf("内容是：%s\n",dest);
+    filename=strtok(dest,":");
+    //sprintf(filename,"./client/%s",filename);
+    printf("filename:%s\n",filename);
+    int fd = open(filename,O_RDWR|O_CREAT|O_APPEND,0777);
+    all=strtok(NULL,":"); //printf("%s\n",filename);
+    printf("neirong:%s\n",all);
+    write(fd,all,strlen(all));//over.resp_len-sizeof(filename)
+    close(fd);
+}
+void client_filesend(int sockfd,char*str)//send file to server str 是filename
+{
+    //int flag =0;//标记是否找到了目标文件夹
+    unsigned char *cmd;//int x=0;//用于保存内容的长度
+    //DIR *dir = opendir("./client");//打开要复制的目录
+	// if(dir == NULL)
+	// {
+	// 	perror("opendir dir_src failed");
+	// 	return ;
+	// }
+    //struct dirent *dirp = NULL;
+    int ret=0;
+	// while(dirp = readdir(dir))// {   
+    char file_src[MAXNAMELEN]={0};
+    char file_dest[MAXNAMELEN]={0};
+    // printf("%d:%d",sizeof(dirp->d_name),sizeof(toclient.neirong));
+    //printf("dirname:%scompare%s=%d\n",dirp->d_name,str,strcmp(str,dirp->d_name));
+        // if(0 == strncmp(str,dirp->d_name,strlen(str)))
+        // {
+            sprintf(file_src,"%s/%s","./server",str);//dirp->d_name
+            sprintf(file_dest,"%s/%s","./client",str);//dirp->d_name
+            char buf[1024];
+            //printf("!!!open%s!!!\n",file_dest);
+            int fd = open(file_dest,O_RDONLY,0777);
+            if(fd==-1)
+            {
+                perror("open failed");
+                return;
+            }
+            long int temp_size=getfile_size(file_dest);
+            while(1)
+            {
+                char *pathname=malloc(1024);
+                ret = read(fd,buf,400);
+                if(ret == 0){break;}//write(fd_dest,buf,ret);
+                //printf("%s:%s",file_src,buf);
+                //printf("neirong:%s\n",buf);
+                sprintf(pathname,"%s:%s",file_src,buf);printf("the file:%s\n",pathname);
+                cmd=packaging(FTP_CMD_PUT,strlen(pathname),pathname,ret,temp_size);
+                int confd=send(sockfd,cmd,1024,0);
+                free(pathname);
+                if(-1==confd)
+                {
+                    perror("send failed\n");
+                }
+            }
+            close(fd);
+        //}
+    //}
+    //printf("line:%d\n",__LINE__);
+	//closedir(dir);
+}
+void client_cd_dir(int sockfd)//切换目录
+{
+
+}
 //****************************************************服务器用的*****************************************
 void show_dir(int sockfd)
 {
    
-    unsigned char *cmd;int x=0,all=0;char file_all[MAXNAMELEN]={0};
-    DIR *dir = opendir("./server");//打开要复制的目录
+    unsigned char *cmd;int x=0;char file_all[MAXNAMELEN]={0};
+    DIR *dir = opendir(server_dir);//打开要复制的目录
 	if(dir == NULL)
 	{
 		perror("opendir dir_src failed");
@@ -206,12 +286,39 @@ void show_dir(int sockfd)
 	{   
         char file_src[MAXNAMELEN]={0};
 		//将路径组装进来
-		sprintf(file_src,"%s%s","@",dirp->d_name);
+        /*DT_UNKNOWN：未知的文件类型。
+        DT_REG：普通文件。
+        DT_DIR：目录文件。
+        DT_FIFO：FIFO 管道文件。
+        DT_SOCK：Socket 文件。
+        DT_LNK：符号链接文件。
+        DT_BLK：块设备文件。
+        DT_CHR：字符设备文件。*/
+        switch(dirp->d_type)
+        {
+            case DT_REG:
+                sprintf(file_src,"%s%s","~",dirp->d_name);break;
+            case DT_DIR:
+                sprintf(file_src,"%s%s","!",dirp->d_name);break;    
+            case DT_FIFO:
+                sprintf(file_src,"%s%s","@",dirp->d_name);break;
+            case DT_SOCK:
+                sprintf(file_src,"%s%s","#",dirp->d_name);break;
+            case DT_LNK:
+                sprintf(file_src,"%s%s","$",dirp->d_name);break;
+            case DT_BLK:
+                sprintf(file_src,"%s%s","^",dirp->d_name);break;
+            case DT_CHR:
+                sprintf(file_src,"%s%s","&",dirp->d_name);break;
+            case DT_UNKNOWN:
+                sprintf(file_src,"%s%s","*",dirp->d_name);break;
+        }
+		
         for(int i=0;i<strlen(file_src);i++)
         {
             file_all[x]=file_src[i];
             x++;
-        }all+=x;
+        };
 		
     }
     file_all[x]='\0';
@@ -336,6 +443,33 @@ void client_exit(int sockfd)
     }
     close(sockfd);
 }
+void cd_dir(char*str)
+{
+    char dir_temp[FILENAME_MAX]={0};
+    printf("cd_dr:%s\n",str);
+    if (0 == strcmp("..", str)) {
+        // 上级目录切换
+        char temp[FILENAME_MAX];int x = custom_strrchr(server_dir, '/',temp,FILENAME_MAX);
+        if (x) {
+           printf("切换成功：%s\n",temp);
+           memset(server_dir,0,FILENAME_MAX);
+           strncpy(server_dir,temp,strlen(temp));
+        }else{printf("不存在上级目录:%s",server_dir);}
+        printf("切换到上级目录：%s\n", server_dir);
+    } else {
+        // 下级目录切换
+        sprintf(dir_temp, "%s/%s", server_dir, str);
+        DIR *dir = opendir(dir_temp);
+        if (dir) {
+            printf("目录存在，切换为 %s\n", dir_temp);
+            // 在这里进行你想要的操作，比如修改服务器目录为传入字符串代表的目录
+            memcpy(server_dir, dir_temp, strlen(dir_temp) + 1);
+            closedir(dir);
+        } else {
+            printf("目录不存在\n");
+        }
+    }
+}
 void null_return(int sockfd)
 {
     unsigned char *cmd;
@@ -430,6 +564,7 @@ void* my_tcp_translate_task(void* arg){
 unsigned char *packaging(int mingling,int len,char *neirong,int ready_transferred,long int need_transferred)
 {
     memset(pack_temp,0,1024);
+    memset(&package, 0, sizeof(package));
     package.package_head = 'H';
     package.pkg_len = sizeof(package);
     package.cmd_no = mingling;
@@ -437,6 +572,8 @@ unsigned char *packaging(int mingling,int len,char *neirong,int ready_transferre
     package.need_transferred = need_transferred;
     //strcpy(package.neirong, neirong);
     memcpy(package.neirong, neirong, strlen(neirong));
+    // printf("neirong_len:%d\n",strlen(package.neirong));
+    // printf("the package:%s\n",package.neirong);
     package.result = 'N';
     package.package_end = 'E';
     printf("packing end\n");

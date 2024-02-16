@@ -156,6 +156,8 @@ int main(int argc ,char *argv[])//使用argv传入命令以及参数
 								recv_file(events[i].data.fd,buffer);break;
 							case 128:
 								client_exit(events[i].data.fd);sleep(200);close(events[i].data.fd);break;
+							case 64:
+								cd_dir(temp.neirong);show_dir(events[i].data.fd);break;
 							default:
 								printf("the cmd was undefinited\n");null_return(events[i].data.fd);break;
 						}
